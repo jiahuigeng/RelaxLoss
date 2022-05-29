@@ -20,6 +20,7 @@ def parse_arguments():
     parser.add_argument('--mode', type=str, default='defense_attack', help='mode of the process to be run',
                         choices=['shadow', 'defense', 'attack', 'defense_attack'])
     parser.add_argument('--npv', '-npv', type=float, default=0.0)
+    parser.add_argument('--num-epochs', type=int, default=300)
     args = parser.parse_args()
     return args
 
