@@ -149,6 +149,9 @@ class Trainer(CIFARTrainer):
         self.crossentropy_noreduce = nn.CrossEntropyLoss(reduction='none')
         self.nploss = NoPeekLoss(self.npv)
 
+    def set_npv(self, npv):
+        self.npv = npv
+
     def train(self, model, optimizer):
         """Train"""
         model.train()
@@ -209,7 +212,7 @@ def main():
 
     ### Set up trainer and model
     trainer = Trainer(args, save_dir)
-    trainer.npv = args.npv
+    trainer.set_npv(args.npv)
     model = models.__dict__[args.model](num_classes=trainer.num_classes)
     # model = torch.nn.DataParallel(model)
     model.to(trainer.device)
