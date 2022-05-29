@@ -10,7 +10,7 @@ https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 import torch.nn as nn
 import math
 from cifar.models.variationalbottleneck import VariationalBottleneck
-__all__ = ['resnet', 'resnet20', 'resnet50', 'resnet20vb']
+__all__ = ['resnet', 'resnet20', 'resnet50', 'resnet20vb', 'resnet20np']
 
 
 def conv3x3(in_channels, out_channels, stride=1):

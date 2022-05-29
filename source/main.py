@@ -12,13 +12,14 @@ def parse_arguments():
     parser.add_argument('--dataset', type=str, default='CIFAR10', help='dataset name',
                         choices=['CIFAR10', 'CIFAR100', 'Texas', 'Purchase'])
     parser.add_argument('--model', type=str, default='resnet20', help='model architecture',
-                        choices=['resnet20', 'vgg11_bn', 'resnet20vb'])
+                        choices=['resnet20', 'vgg11_bn', 'resnet20vb', 'resnet20np'])
     parser.add_argument('--method', type=str, default='relaxloss', help='method name',
                         choices=['vanilla', 'relaxloss', 'advreg', 'dpsgd', 'confidence_penalty', 'distillation',
-                                 'dropout', 'early_stopping', 'label_smoothing', 'variationbottleneck'])
+                                 'dropout', 'early_stopping', 'label_smoothing', 'variationbottleneck', 'nopeek'])
     parser.add_argument('--seed', '-s', type=int, default=1000, help='random seed')
     parser.add_argument('--mode', type=str, default='defense_attack', help='mode of the process to be run',
                         choices=['shadow', 'defense', 'attack', 'defense_attack'])
+    parser.add_argument('--npv', '-npv', type=float, default=0.2)
     args = parser.parse_args()
     return args
 
@@ -36,6 +37,12 @@ def run_defense(dataset_prefix, save_root, args, method):
 
         ## train student model
         command = f'python {dataset_prefix}/defense/{method}.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset} -teacher {teacher_path}'
+        command += f' --model {args.model}' if model_flag else ''
+        print(command)
+        os.system(command)
+
+    elif method == "nopeek":
+        command = f'python {dataset_prefix}/defense/{method}.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset} --npv {args.npv}'
         command += f' --model {args.model}' if model_flag else ''
         print(command)
         os.system(command)
