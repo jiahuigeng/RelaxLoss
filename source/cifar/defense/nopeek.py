@@ -209,7 +209,6 @@ def main():
 
     ### Set up trainer and model
     trainer = Trainer(args, save_dir)
-    trainer.npv = args.npv
     model = models.__dict__[args.model](num_classes=trainer.num_classes)
     # model = torch.nn.DataParallel(model)
     model.to(trainer.device)

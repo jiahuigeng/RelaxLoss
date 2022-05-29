@@ -31,6 +31,9 @@ class BaseTrainer(object):
         self.set_logger()
         self.set_criterion()
         self.npv = 0.0
+        if hasattr(the_args, 'npv'):
+            self.npv = the_args.npv
+
 
     def set_cuda_device(self):
         """The function to set CUDA device."""
