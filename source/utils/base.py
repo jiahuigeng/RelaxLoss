@@ -157,7 +157,7 @@ class BaseTrainer(object):
                 outputs = model(inputs)
 
                 ### Evaluate
-                loss = criterion(outputs, targets)
+                loss = criterion(outputs, targets.long())
                 prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
                 losses.update(loss.item(), inputs.size(0))
                 top1.update(prec1.item(), inputs.size(0))

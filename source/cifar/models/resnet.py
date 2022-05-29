@@ -9,7 +9,7 @@ https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 '''
 import torch.nn as nn
 import math
-
+from source.cifar.models.variationalbottleneck import VariationalBottleneck
 __all__ = ['resnet', 'resnet20', 'resnet50']
 
 
@@ -92,7 +92,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, num_blocks, num_classes=10, droprate=0):
+    def __init__(self, block, num_blocks, num_classes=10, droprate=0, vb=False):
         super(ResNet, self).__init__()
 
         self.inplanes = 16
@@ -118,6 +118,12 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+
+        self.vbflag = False
+        if vb == True:
+            self.vbflag = True
+            self.VB = VariationalBottleneck((64,))
+
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -147,6 +153,8 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
+        if self.vbflag:
+            self.VB(x)
         x = self.fc(x)
 
         return x
@@ -162,6 +170,8 @@ def resnet(**kwargs):
 def resnet20(**kwargs):
     return ResNet(block=BasicBlock, num_blocks=[3, 3, 3], **kwargs)
 
+def resnet20vb(**kwargs):
+    return ResNet(block=BasicBlock, num_blocks=[3, 3, 3], vb=True, **kwargs)
 
 def resnet50(**kwargs):
     return ResNet(block=Bottleneck, num_blocks=[4, 8, 4], **kwargs)

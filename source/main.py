@@ -15,7 +15,7 @@ def parse_arguments():
                         choices=['resnet20', 'vgg11_bn'])
     parser.add_argument('--method', type=str, default='relaxloss', help='method name',
                         choices=['vanilla', 'relaxloss', 'advreg', 'dpsgd', 'confidence_penalty', 'distillation',
-                                 'dropout', 'early_stopping', 'label_smoothing'])
+                                 'dropout', 'early_stopping', 'label_smoothing', 'variationbottleneck'])
     parser.add_argument('--seed', '-s', type=int, default=1000, help='random seed')
     parser.add_argument('--mode', type=str, default='defense_attack', help='mode of the process to be run',
                         choices=['shadow', 'defense', 'attack', 'defense_attack'])

@@ -109,7 +109,7 @@ class Trainer(CIFARTrainer):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             dataload_time.update(time.time() - time_stamp)
             outputs = model(inputs)
-            loss_ce_full = self.crossentropy_noreduce(outputs, targets)
+            loss_ce_full = self.crossentropy_noreduce(outputs, targets.long())
             loss_ce = torch.mean(loss_ce_full)
 
             if epoch % 2 == 0:  # gradient ascent/ normal gradient descent
@@ -120,7 +120,7 @@ class Trainer(CIFARTrainer):
                 else:  # posterior flattening
                     pred = torch.argmax(outputs, dim=1)
                     correct = torch.eq(pred, targets).float()
-                    confidence_target = self.softmax(outputs)[torch.arange(targets.size(0)), targets]
+                    confidence_target = self.softmax(outputs)[torch.arange(targets.size(0)), targets.long()]
                     confidence_target = torch.clamp(confidence_target, min=0., max=self.upper)
                     confidence_else = (1.0 - confidence_target) / (self.num_classes - 1)
                     onehot = one_hot_embedding(targets, num_classes=self.num_classes)
