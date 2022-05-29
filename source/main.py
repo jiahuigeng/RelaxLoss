@@ -19,7 +19,7 @@ def parse_arguments():
     parser.add_argument('--seed', '-s', type=int, default=1000, help='random seed')
     parser.add_argument('--mode', type=str, default='defense_attack', help='mode of the process to be run',
                         choices=['shadow', 'defense', 'attack', 'defense_attack'])
-    parser.add_argument('--npv', '-npv', type=float, default=0.2)
+    parser.add_argument('--npv', '-npv', type=float, default=0.0)
     args = parser.parse_args()
     return args
 

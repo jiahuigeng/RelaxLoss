@@ -41,7 +41,7 @@ def parse_arguments():
     parser.add_argument('--if_resume', type=str2bool, help='If resume from checkpoint')
     parser.add_argument('--if_data_augmentation', '-aug', type=str2bool, help='If use data augmentation')
     parser.add_argument('--if_onlyeval', type=str2bool, help='If only evaluate the pre-trained model')
-    parser.add_argument('--npv', type=float, default=0.2)
+    parser.add_argument('--npv', type=float, default=0.0)
     return parser
 
 
@@ -149,9 +149,6 @@ class Trainer(CIFARTrainer):
         self.crossentropy_noreduce = nn.CrossEntropyLoss(reduction='none')
         self.nploss = NoPeekLoss(self.npv)
 
-    def set_npv(self, npv):
-        self.npv = npv
-
     def train(self, model, optimizer):
         """Train"""
         model.train()
@@ -212,7 +209,7 @@ def main():
 
     ### Set up trainer and model
     trainer = Trainer(args, save_dir)
-    trainer.set_npv(args.npv)
+    trainer.npv = args.npv
     model = models.__dict__[args.model](num_classes=trainer.num_classes)
     # model = torch.nn.DataParallel(model)
     model.to(trainer.device)

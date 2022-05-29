@@ -30,6 +30,7 @@ class BaseTrainer(object):
         self.set_dataloader()
         self.set_logger()
         self.set_criterion()
+        self.npv = 0.0
 
     def set_cuda_device(self):
         """The function to set CUDA device."""
