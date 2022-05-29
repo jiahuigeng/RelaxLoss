@@ -31,16 +31,19 @@ def run_defense(dataset_prefix, save_root, args, method):
         if not os.path.exists(os.path.join(teacher_path, 'model.pt')):
             command = f'python {dataset_prefix}/defense/vanilla.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset}'
             command += f' --model {args.model}' if model_flag else ''
+            print(command)
             os.system(command)
 
         ## train student model
         command = f'python {dataset_prefix}/defense/{method}.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset} -teacher {teacher_path}'
         command += f' --model {args.model}' if model_flag else ''
+        print(command)
         os.system(command)
 
     else:
         command = f'python {dataset_prefix}/defense/{method}.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset}'
         command += f' --model {args.model}' if model_flag else ''
+        print(command)
         os.system(command)
 
 
@@ -52,17 +55,20 @@ def run_shadow(dataset_prefix, save_root, args, method):
         if not os.path.exists(os.path.join(teacher_path, 'model.pt')):
             command = f'python {dataset_prefix}/defense/vanilla.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset} --partition shadow'
             command += f' --model {args.model}' if model_flag else ''
+            print(command)
             os.system(command)
 
         ## train student model
         command = f'python {dataset_prefix}/defense/{method}.py -name seed{args.seed} -s {args.seed} ' \
                   f'--dataset {args.dataset} -teacher {teacher_path} --partition shadow'
         command += f' --model {args.model}' if model_flag else ''
+        print(command)
         os.system(command)
 
     else:
         command = f'python {dataset_prefix}/defense/{method}.py -name seed{args.seed} -s {args.seed} --dataset {args.dataset} --partition shadow'
         command += f' --model {args.model}' if model_flag else ''
+        print(command)
         os.system(command)
 
 

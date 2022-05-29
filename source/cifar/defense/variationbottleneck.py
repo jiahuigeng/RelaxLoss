@@ -142,7 +142,7 @@ def main():
     ### Set up trainer and model
     trainer = Trainer(args, save_dir)
     model = models.__dict__[args.model](num_classes=trainer.num_classes)
-    model = torch.nn.DataParallel(model)
+    # model = torch.nn.DataParallel(model)
     model.to(trainer.device)
     torch.backends.cudnn.benchmark = True
     print('Total params: %.2f' % (sum(p.numel() for p in model.parameters())))
