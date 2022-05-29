@@ -2,22 +2,23 @@ import os
 import sys
 import argparse
 import random
+import time
 import shutil
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim as optim
+from functools import partial
 
 FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(FILE_DIR, '../'))
 sys.path.append(os.path.join(FILE_DIR, '../../'))
-SAVE_ROOT = os.path.join(FILE_DIR, '../../../results/%s/%s/variationbottleneck')
-from base import CIFARTrainer
+SAVE_ROOT = os.path.join(FILE_DIR, '../../../results/%s/%s/nopeek')
 import models as models
-import torch.nn as nn
-import time
-from utils import mkdir, str2bool, load_yaml, write_yaml, adjust_learning_rate, plot_hist
+from base import CIFARTrainer
 from utils import mkdir, str2bool, write_yaml, load_yaml, adjust_learning_rate, \
     AverageMeter, Bar, plot_hist, accuracy, one_hot_embedding, CrossEntropy_soft
+
 
 #############################################################################################################
 # get and save the arguments
@@ -37,6 +38,8 @@ def parse_arguments():
     parser.add_argument('--test_batchsize', type=int, help='testing batch size')
     parser.add_argument('--num_workers', type=int, help='number of workers')
     parser.add_argument('--num_epochs', '-ep', type=int, help='number of epochs')
+    parser.add_argument('--alpha', type=float, help='the desired loss level')
+    parser.add_argument('--upper', type=float, help='upper confidence level')
     parser.add_argument('--partition', type=str, choices=['target', 'shadow'], help='training partition')
     parser.add_argument('--if_resume', type=str2bool, help='If resume from checkpoint')
     parser.add_argument('--if_data_augmentation', '-aug', type=str2bool, help='If use data augmentation')
@@ -45,7 +48,11 @@ def parse_arguments():
 
 
 def check_args(parser):
-    """Check and store the arguments as well as set up the save_dir"""
+    '''
+    check and store the arguments as well as set up the save_dir
+    :param args: arguments
+    :return:
+    '''
     ## set up save_dir
     args = parser.parse_args()
     save_dir = os.path.join(SAVE_ROOT % (args.dataset, args.model), args.exp_name)
@@ -62,7 +69,9 @@ def check_args(parser):
         args = parser.parse_args()
     else:
         default_configs = load_yaml(FILE_DIR + '/configs/default.yml')
+        specific_configs = load_yaml(FILE_DIR + '/configs/%s_%s.yml' % (args.dataset, args.model))
         parser.set_defaults(**default_configs)
+        parser.set_defaults(**specific_configs)
         args = parser.parse_args()
         write_yaml(vars(args), os.path.join(save_dir, 'params.yml'))
 
@@ -70,19 +79,86 @@ def check_args(parser):
     shutil.copy(os.path.realpath(__file__), save_dir)
     return args, save_dir
 
+class NoPeekLoss(torch.nn.modules.loss._Loss):
+    def __init__(self, dcor_weighting: float = 0.1) -> None:
+        super().__init__()
+        self.dcor_weighting = dcor_weighting
+
+        self.ce = torch.nn.CrossEntropyLoss()
+        self.dcor = DistanceCorrelationLoss()
+
+    def forward(self, inputs, intermediates, outputs, targets):
+        cce_loss = self.ce(outputs, targets)
+
+        # DistanceCorrelationLoss is costly, so only calc it if necessary
+        if self.dcor_weighting > 0.0:
+            dcor_loss = self.dcor_weighting * self.dcor(inputs, intermediates)
+            return cce_loss, dcor_loss
+        else:
+            return (cce_loss,)
+
+
+class DistanceCorrelationLoss(torch.nn.modules.loss._Loss):
+    def forward(self, input_data, intermediate_data):
+        input_data = input_data.view(input_data.size(0), -1)
+        intermediate_data = intermediate_data.view(intermediate_data.size(0), -1)
+
+        # Get A matrices of data
+        A_input = self._A_matrix(input_data)
+        A_intermediate = self._A_matrix(intermediate_data)
+
+        # Get distance variances
+        input_dvar = self._distance_variance(A_input)
+        intermediate_dvar = self._distance_variance(A_intermediate)
+
+        # Get distance covariance
+        dcov = self._distance_covariance(A_input, A_intermediate)
+
+        # Put it together
+        dcorr = dcov / (input_dvar * intermediate_dvar).sqrt()
+
+        return dcorr
+
+    def _distance_covariance(self, a_matrix, b_matrix):
+        return (a_matrix * b_matrix).sum().sqrt() / a_matrix.size(0)
+
+    def _distance_variance(self, a_matrix):
+        return (a_matrix ** 2).sum().sqrt() / a_matrix.size(0)
+
+    def _A_matrix(self, data):
+        distance_matrix = self._distance_matrix(data)
+
+        row_mean = distance_matrix.mean(dim=0, keepdim=True)
+        col_mean = distance_matrix.mean(dim=1, keepdim=True)
+        data_mean = distance_matrix.mean()
+
+        return distance_matrix - row_mean - col_mean + data_mean
+
+    def _distance_matrix(self, data):
+        n = data.size(0)
+        distance_matrix = torch.zeros((n, n))
+
+        for i in range(n):
+            for j in range(n):
+                row_diff = data[i] - data[j]
+                distance_matrix[i, j] = (row_diff ** 2).sum()
+
+        return distance_matrix
 
 #############################################################################################################
-# main function
+# helper functions
 #############################################################################################################
-
 class Trainer(CIFARTrainer):
-    def set_criterion(self):
-        """Set up the relaxloss training criterion"""
-        self.criterion = nn.CrossEntropyLoss()
-        self.crossentropy = nn.CrossEntropyLoss()
-        self.crossentropy_noreduce = nn.CrossEntropyLoss(reduction='none')
+    # def set_criterion(self):
+    #     """Set up the relaxloss training criterion"""
+    #     self.crossentropy_noreduce = nn.CrossEntropyLoss(reduction='none')
+    #     self.crossentropy_soft = partial(CrossEntropy_soft, reduction='none')
+    #     self.crossentropy = nn.CrossEntropyLoss()
+    #     self.softmax = nn.Softmax(dim=1)
+    #     self.alpha = self.args.alpha
+    #     self.upper = self.args.upper
 
-    def train(self, model, optimizer):
+    def train(self, model, optimizer, epoch):
         """Train"""
         model.train()
         criterion = self.criterion
@@ -102,7 +178,7 @@ class Trainer(CIFARTrainer):
 
             ### Output
             outputs = model(inputs)
-            loss = criterion(outputs, targets.long()) + model.loss()
+            loss = criterion(outputs, targets)
 
             ### Record accuracy and loss
             prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
@@ -135,15 +211,88 @@ class Trainer(CIFARTrainer):
 
         bar.finish()
         return (losses.avg, top1.avg, top5.avg)
+        # model.train()
+        #
+        # losses = AverageMeter()
+        # losses_ce = AverageMeter()
+        # top1 = AverageMeter()
+        # top5 = AverageMeter()
+        # batch_time = AverageMeter()
+        # dataload_time = AverageMeter()
+        # time_stamp = time.time()
+        #
+        # bar = Bar('Processing', max=len(self.trainloader))
+        # for batch_idx, (inputs, targets) in enumerate(self.trainloader):
+        #     inputs, targets = inputs.to(self.device), targets.to(self.device)
+        #     dataload_time.update(time.time() - time_stamp)
+        #     outputs = model(inputs)
+        #
+        #     # loss_ce_full = self.crossentropy_noreduce(outputs, targets.long())
+        #     # loss_ce = torch.mean(loss_ce_full)
+        #
+        #     if epoch % 2 == 0:  # gradient ascent/ normal gradient descent
+        #         loss = (loss_ce - self.alpha).abs()
+        #     else:
+        #         if loss_ce > self.alpha:  # normal gradient descent
+        #             loss = loss_ce
+        #         else:  # posterior flattening
+        #             pred = torch.argmax(outputs, dim=1)
+        #             correct = torch.eq(pred, targets).float()
+        #             confidence_target = self.softmax(outputs)[torch.arange(targets.size(0)), targets.long()]
+        #             confidence_target = torch.clamp(confidence_target, min=0., max=self.upper)
+        #             confidence_else = (1.0 - confidence_target) / (self.num_classes - 1)
+        #             onehot = one_hot_embedding(targets, num_classes=self.num_classes)
+        #             soft_targets = onehot * confidence_target.unsqueeze(-1).repeat(1, self.num_classes) \
+        #                            + (1 - onehot) * confidence_else.unsqueeze(-1).repeat(1, self.num_classes)
+        #             loss = (1 - correct) * self.crossentropy_soft(outputs, soft_targets) - 1. * loss_ce_full
+        #             loss = torch.mean(loss)
+        #
+        #     ### Record accuracy and loss
+        #     prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
+        #     losses.update(loss.item(), inputs.size(0))
+        #     losses_ce.update(loss_ce.item(), inputs.size(0))
+        #     top1.update(prec1.item(), inputs.size(0))
+        #     top5.update(prec5.item(), inputs.size(0))
+        #
+        #     ### Optimization
+        #     optimizer.zero_grad()
+        #     loss.backward()
+        #     optimizer.step()
+        #
+        #     ### Record the total time for processing the batch
+        #     batch_time.update(time.time() - time_stamp)
+        #     time_stamp = time.time()
+        #
+        #     ### Progress bar
+        #     bar.suffix = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+        #         batch=batch_idx + 1,
+        #         size=len(self.trainloader),
+        #         data=dataload_time.avg,
+        #         bt=batch_time.avg,
+        #         total=bar.elapsed_td,
+        #         eta=bar.eta_td,
+        #         loss=losses.avg,
+        #         top1=top1.avg,
+        #         top5=top5.avg,
+        #     )
+        #     bar.next()
+        #
+        # bar.finish()
+        # return (losses_ce.avg, top1.avg, top5.avg)
 
+
+#############################################################################################################
+# main function
+#############################################################################################################
 def main():
+    ### config
     args, save_dir = check_args(parse_arguments())
 
-    ### Set up trainer and model
+    ### Set up trainer
     trainer = Trainer(args, save_dir)
     model = models.__dict__[args.model](num_classes=trainer.num_classes)
     model = torch.nn.DataParallel(model)
-    model.to(trainer.device)
+    model = model.to(trainer.device)
     torch.backends.cudnn.benchmark = True
     print('Total params: %.2f' % (sum(p.numel() for p in model.parameters())))
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -171,11 +320,11 @@ def main():
     ### Training
     for epoch in range(start_epoch, args.num_epochs):
         adjust_learning_rate(optimizer, epoch, args.gamma, args.schedule_milestone)
-        train_loss, train_acc, train_acc5 = trainer.train(model, optimizer)
-        test_loss, test_acc, test_acc5 = trainer.test(model)
+        train_ce, train_acc, train_acc5 = trainer.train(model, optimizer, epoch)
+        test_ce, test_acc, test_acc5 = trainer.test(model)
         for param_group in optimizer.param_groups:
             lr = param_group['lr']
-        logger.append([lr, train_loss, test_loss, train_acc, test_acc, train_acc5, test_acc5])
+        logger.append([lr, train_ce, test_ce, train_acc, test_acc, train_acc5, test_acc5])
         print('Epoch %d, Train acc: %f, Test acc: %f, lr: %f' % (epoch, train_acc, test_acc, lr))
 
         ### Save checkpoint
