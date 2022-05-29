@@ -206,6 +206,55 @@ class Trainer(CIFARTrainer):
         bar.finish()
         return (losses.avg, top1.avg, top5.avg)
 
+    def test(self, model):
+        """Test"""
+        model.eval()
+        criterion = self.crossentropy
+        losses = AverageMeter()
+        top1 = AverageMeter()
+        top5 = AverageMeter()
+        batch_time = AverageMeter()
+        dataload_time = AverageMeter()
+        time_stamp = time.time()
+
+        bar = Bar('Processing', max=len(self.testloader))
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(self.testloader):
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+                ### Record the data loading time
+                dataload_time.update(time.time() - time_stamp)
+
+                ### Forward
+                outputs, _ = model(inputs)
+
+                ### Evaluate
+                loss = criterion(outputs, targets.long())
+                prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
+                losses.update(loss.item(), inputs.size(0))
+                top1.update(prec1.item(), inputs.size(0))
+                top5.update(prec5.item(), inputs.size(0))
+
+                ### Record the total time for processing the batch
+                batch_time.update(time.time() - time_stamp)
+                time_stamp = time.time()
+
+                ### Progress bar
+                bar.suffix = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+                    batch=batch_idx + 1,
+                    size=len(self.testloader),
+                    data=dataload_time.avg,
+                    bt=batch_time.avg,
+                    total=bar.elapsed_td,
+                    eta=bar.eta_td,
+                    loss=losses.avg,
+                    top1=top1.avg,
+                    top5=top5.avg,
+                )
+                bar.next()
+            bar.finish()
+        return (losses.avg, top1.avg, top5.avg)
+
 def main():
     args, save_dir = check_args(parse_arguments())
 
