@@ -12,7 +12,7 @@ def parse_arguments():
     parser.add_argument('--dataset', type=str, default='CIFAR10', help='dataset name',
                         choices=['CIFAR10', 'CIFAR100', 'Texas', 'Purchase'])
     parser.add_argument('--model', type=str, default='resnet20', help='model architecture',
-                        choices=['resnet20', 'vgg11_bn'])
+                        choices=['resnet20', 'vgg11_bn', 'resnet20vb'])
     parser.add_argument('--method', type=str, default='relaxloss', help='method name',
                         choices=['vanilla', 'relaxloss', 'advreg', 'dpsgd', 'confidence_penalty', 'distillation',
                                  'dropout', 'early_stopping', 'label_smoothing', 'variationbottleneck'])

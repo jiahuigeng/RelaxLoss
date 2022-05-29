@@ -76,7 +76,7 @@ def main():
 
     ### Set up trainer and model
     trainer = CIFARTrainer(args, save_dir)
-    model = models.__dict__[args.model+'vb'](num_classes=trainer.num_classes)
+    model = models.__dict__[args.model](num_classes=trainer.num_classes)
     model = torch.nn.DataParallel(model)
     model.to(trainer.device)
     torch.backends.cudnn.benchmark = True
