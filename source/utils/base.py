@@ -29,10 +29,13 @@ class BaseTrainer(object):
         self.set_seed()
         self.set_dataloader()
         self.set_logger()
-        self.set_criterion()
+
         self.npv = 0.0
         if hasattr(the_args, 'npv'):
             self.npv = the_args.npv
+
+        self.set_criterion()
+
 
 
     def set_cuda_device(self):
